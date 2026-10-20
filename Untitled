@@ -1,0 +1,123 @@
+import json
+import urllib.parse
+import urllib.request
+from pathlib import Path
+
+OUT = Path(__file__).resolve().parent / "static" / "images"
+OUT.mkdir(parents=True, exist_ok=True)
+
+API = "https://commons.wikimedia.org/w/api.php"
+
+# Start with destination photographs only.
+IMAGES = {
+    "dest-mumbai.jpg": "Mumbai Gateway of India",
+    "dest-pune.jpg": "Pune Maharashtra city",
+    "dest-sambhajinagar.jpg": "Chhatrapati Sambhajinagar Maharashtra",
+    "dest-lonavala.jpg": "Lonavala Maharashtra landscape",
+    "dest-mahableshwar.jpg": "Mahabaleshwar Maharashtra",
+    "dest-delhi.jpg": "Delhi India Gate",
+    "dest-agra.jpg": "Agra Taj Mahal",
+    "dest-varanasi.jpg": "Varanasi ghats Ganges",
+    "dest-jaipur.jpg": "Jaipur Rajasthan Hawa Mahal",
+    "dest-udaipur.jpg": "Udaipur Rajasthan City Palace lake",
+    "dest-amritsar.jpg": "Golden Temple Amritsar",
+    "dest-goa.jpg": "Goa India beach",
+    "dest-munnar.jpg": "Munnar Kerala tea gardens",
+    "dest-alleppey.jpg": "Alappuzha Kerala backwaters",
+    "dest-hampi.jpg": "Hampi Karnataka ruins",
+    "dest-mysore.jpg": "Mysore Palace Karnataka",
+    "dest-madurai.jpg": "Meenakshi Temple Madurai",
+    "dest-ooty.jpg": "Ooty Tamil Nadu landscape",
+    "dest-kevadia.jpg": "Statue of Unity Gujarat",
+    "dest-kutch.jpg": "Rann of Kutch Gujarat",
+    "dest-kolkata.jpg": "Victoria Memorial Kolkata",
+    "dest-darjeeling.jpg": "Darjeeling West Bengal tea",
+    "dest-shimla.jpg": "Shimla Himachal Pradesh",
+    "dest-manali.jpg": "Manali Himachal Pradesh mountains",
+    "dest-rishikesh.jpg": "Rishikesh Uttarakhand Ganges",
+    "dest-nainital.jpg": "Nainital lake Uttarakhand",
+    "dest-srinagar.jpg": "Dal Lake Srinagar Kashmir",
+    "dest-gulmarg.jpg": "Gulmarg Kashmir landscape",
+    "dest-khajuraho.jpg": "Khajuraho temples Madhya Pradesh",
+}
+
+
+def api_request(params):
+    params["format"] = "json"
+
+    url = API + "?" + urllib.parse.urlencode(params)
+
+    request = urllib.request.Request(
+        url,
+        headers={
+            "User-Agent": "SmartTourismCollegeProject/1.0"
+        }
+    )
+
+    with urllib.request.urlopen(request, timeout=30) as response:
+        return json.loads(response.read().decode("utf-8"))
+
+
+def find_photo(search_text):
+    data = api_request({
+        "action": "query",
+        "generator": "search",
+        "gsrsearch": search_text + " filetype:bitmap",
+        "gsrnamespace": 6,
+        "gsrlimit": 8,
+        "prop": "imageinfo",
+        "iiprop": "url|mime",
+        "iiurlwidth": 1200,
+    })
+
+    pages = data.get("query", {}).get("pages", {})
+
+    for page in pages.values():
+        info = page.get("imageinfo", [])
+
+        if not info:
+            continue
+
+        image = info[0]
+        mime = image.get("mime", "")
+
+        if mime in ("image/jpeg", "image/png", "image/webp"):
+            return image.get("thumburl") or image.get("url")
+
+    return None
+
+
+def download_image(filename, search_text):
+    print(f"Searching: {search_text}")
+
+    try:
+        image_url = find_photo(search_text)
+
+        if not image_url:
+            print(f"  NOT FOUND: {filename}")
+            return
+
+        request = urllib.request.Request(
+            image_url,
+            headers={
+                "User-Agent": "SmartTourismCollegeProject/1.0"
+            }
+        )
+
+        with urllib.request.urlopen(request, timeout=60) as response:
+            data = response.read()
+
+        path = OUT / filename
+        path.write_bytes(data)
+
+        print(f"  SAVED: {filename}")
+
+    except Exception as error:
+        print(f"  ERROR: {filename}")
+        print(f"  {error}")
+
+
+for filename, search_text in IMAGES.items():
+    download_image(filename, search_text)
+
+print("\nFinished downloading destination photographs.")
